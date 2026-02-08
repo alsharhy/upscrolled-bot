@@ -8,8 +8,8 @@ from flask import Flask
 # ====================
 FACEBOOK_PAGE = "https://mbasic.facebook.com/AlArabiya"
 
-TELEGRAM_BOT_TOKEN = "PUT_YOUR_BOT_TOKEN"
-TELEGRAM_CHAT_ID = "PUT_YOUR_CHAT_ID"
+TELEGRAM_BOT_TOKEN = "7522002533:AAEQzquyk1AOV71gtyljXeMHfCBJyKv3iE0"
+TELEGRAM_CHAT_ID = "5442141079"
 
 HASH_FILE = "last_post_hash.txt"
 STATE_FILE = "state.txt"
