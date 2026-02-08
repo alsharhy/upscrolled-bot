@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Flask, jsonify
 
 # =========================
-# بياناتك (كما طلبت)
+# بياناتك
 # =========================
 TELEGRAM_BOT_TOKEN = "7522002533:AAEQzquyk1AOV71gtyljXeMHfCBJyKv3iE0"
 OWNER_CHAT_ID = 5442141079
@@ -30,6 +30,12 @@ app = Flask(__name__)
 # =========================
 # أدوات عامة
 # =========================
+def delete_webhook():
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook"
+    r = requests.post(url, timeout=20)
+    print("Webhook deleted:", r.text)
+
+
 def fetch_page(url):
     try:
         r = requests.get(url, headers=HEADERS, timeout=20)
@@ -108,7 +114,7 @@ def extract_latest_post():
 
 
 # =========================
-# المراقبة التلقائية 24/7
+# المراقبة التلقائية
 # =========================
 def auto_monitor():
     while True:
@@ -134,7 +140,7 @@ def auto_monitor():
 
 
 # =========================
-# الاستماع لأوامر تلجرام + الأزرار
+# أوامر تلجرام + الأزرار
 # =========================
 def telegram_listener():
     print("✅ Telegram listener started")
@@ -153,8 +159,9 @@ def telegram_listener():
 
                 # رسالة نصية
                 if "message" in update:
-                    chat_id = update["message"]["chat"]["id"]
-                    text = update["message"].get("text", "")
+                    msg = update["message"]
+                    chat_id = msg["chat"]["id"]
+                    text = msg.get("text", "")
 
                     if chat_id != OWNER_CHAT_ID:
                         continue
@@ -166,7 +173,7 @@ def telegram_listener():
                             main_keyboard()
                         )
 
-                # زر شفاف (Callback)
+                # زر شفاف
                 if "callback_query" in update:
                     cb = update["callback_query"]
                     chat_id = cb["message"]["chat"]["id"]
@@ -212,6 +219,9 @@ def home():
 # تشغيل
 # =========================
 if __name__ == "__main__":
+    delete_webhook()  # 🔥 حل مشكلة /start نهائيًا
+
     threading.Thread(target=auto_monitor, daemon=True).start()
     threading.Thread(target=telegram_listener, daemon=True).start()
+
     app.run(host="0.0.0.0", port=8080)
