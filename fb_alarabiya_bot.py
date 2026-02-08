@@ -15,40 +15,22 @@ TELEGRAM_BOT_TOKEN = "7522002533:AAEQzquyk1AOV71gtyljXeMHfCBJyKv3iE0"
 OWNER_CHAT_ID = 5442141079
 
 FACEBOOK_PAGE = "https://mbasic.facebook.com/AlArabiya"
-
 CHECK_INTERVAL = 300  # 5 دقائق
 
 HASH_FILE = "last_post_hash.txt"
 STATE_FILE = "state.txt"
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 app = Flask(__name__)
 
 # =========================
-# أدوات عامة
+# Telegram Utils
 # =========================
 def delete_webhook():
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook"
-    r = requests.post(url, timeout=20)
+    r = requests.post(url, data={"drop_pending_updates": True}, timeout=20)
     print("Webhook deleted:", r.text)
-
-
-def fetch_page(url):
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        if r.status_code == 200:
-            return r.text
-    except Exception as e:
-        print("Fetch error:", e)
-    return None
-
-
-def telegram_request(method, data):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
-    return requests.post(url, data=data, timeout=20)
 
 
 def send_message(chat_id, text, keyboard=None):
@@ -59,7 +41,11 @@ def send_message(chat_id, text, keyboard=None):
     }
     if keyboard:
         data["reply_markup"] = keyboard
-    telegram_request("sendMessage", data)
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+        data=data,
+        timeout=20
+    )
 
 
 def main_keyboard():
@@ -71,6 +57,18 @@ def main_keyboard():
             ]
         ]
     }
+
+# =========================
+# Helpers
+# =========================
+def fetch_page(url):
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        if r.status_code == 200:
+            return r.text
+    except Exception as e:
+        print("Fetch error:", e)
+    return None
 
 
 def get_last_hash():
@@ -90,7 +88,7 @@ def get_state():
 
 
 # =========================
-# استخراج آخر منشور
+# Facebook
 # =========================
 def extract_latest_post():
     html = fetch_page(FACEBOOK_PAGE)
@@ -114,7 +112,7 @@ def extract_latest_post():
 
 
 # =========================
-# المراقبة التلقائية
+# Auto Monitor
 # =========================
 def auto_monitor():
     while True:
@@ -140,11 +138,11 @@ def auto_monitor():
 
 
 # =========================
-# أوامر تلجرام + الأزرار
+# Telegram Listener
 # =========================
 def telegram_listener():
     print("✅ Telegram listener started")
-    offset = 0
+    offset = None  # مهم جدًا
 
     while True:
         try:
@@ -156,31 +154,26 @@ def telegram_listener():
 
             for update in r.get("result", []):
                 offset = update["update_id"] + 1
+                print("📩 Update received:", update)
 
-                # رسالة نصية
+                # /start
                 if "message" in update:
                     msg = update["message"]
                     chat_id = msg["chat"]["id"]
                     text = msg.get("text", "")
 
-                    if chat_id != OWNER_CHAT_ID:
-                        continue
-
-                    if text in ("/start", "start", "Start"):
+                    if text.startswith("/start"):
                         send_message(
                             chat_id,
-                            "✅ البوت يعمل ويراقب صفحة العربية تلقائيًا\n\nاختر من الأزرار 👇",
+                            "✅ البوت يعمل الآن\nاختر من الأزرار 👇",
                             main_keyboard()
                         )
 
-                # زر شفاف
+                # Buttons
                 if "callback_query" in update:
                     cb = update["callback_query"]
                     chat_id = cb["message"]["chat"]["id"]
                     data = cb["data"]
-
-                    if chat_id != OWNER_CHAT_ID:
-                        continue
 
                     if data == "new":
                         post_url, text = extract_latest_post()
@@ -194,7 +187,7 @@ def telegram_listener():
                                 save_hash(h)
                                 send_message(
                                     chat_id,
-                                    f"🆕 منشور جديد (يدوي)\n\n{text[:1200]}\n\n🔗 {post_url}",
+                                    f"🆕 منشور جديد\n\n{text[:1200]}\n\n🔗 {post_url}",
                                     main_keyboard()
                                 )
 
@@ -208,7 +201,7 @@ def telegram_listener():
 
 
 # =========================
-# Flask (لـ Render)
+# Flask
 # =========================
 @app.route("/")
 def home():
@@ -216,10 +209,10 @@ def home():
 
 
 # =========================
-# تشغيل
+# Run
 # =========================
 if __name__ == "__main__":
-    delete_webhook()  # 🔥 حل مشكلة /start نهائيًا
+    delete_webhook()  # 🔥 حل جذري
 
     threading.Thread(target=auto_monitor, daemon=True).start()
     threading.Thread(target=telegram_listener, daemon=True).start()
