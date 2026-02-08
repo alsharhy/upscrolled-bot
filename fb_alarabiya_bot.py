@@ -1,40 +1,70 @@
-import requests, re, hashlib, os, time, threading
+import requests
+import re
+import hashlib
+import os
+import time
+import threading
 from html import unescape
 from datetime import datetime
-from flask import Flask
+from flask import Flask, jsonify
 
-# ====================
-# إعدادات
-# ====================
+# =========================
+# بياناتك (كما طلبت)
+# =========================
+TELEGRAM_BOT_TOKEN = "7522002533:AAEQzquyk1AOV71gtyljXeMHfCBJyKv3iE0"
+OWNER_CHAT_ID = 5442141079
+
 FACEBOOK_PAGE = "https://mbasic.facebook.com/AlArabiya"
 
-TELEGRAM_BOT_TOKEN = "7522002533:AAEQzquyk1AOV71gtyljXeMHfCBJyKv3iE0"
-TELEGRAM_CHAT_ID = "5442141079"
+CHECK_INTERVAL = 300  # 5 دقائق
 
 HASH_FILE = "last_post_hash.txt"
 STATE_FILE = "state.txt"
 
-CHECK_INTERVAL = 300  # 5 دقائق
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
 app = Flask(__name__)
 
-# ====================
-# أدوات مساعدة
-# ====================
+# =========================
+# أدوات عامة
+# =========================
 def fetch_page(url):
     try:
         r = requests.get(url, headers=HEADERS, timeout=20)
         if r.status_code == 200:
             return r.text
-    except:
-        pass
+    except Exception as e:
+        print("Fetch error:", e)
     return None
 
 
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
+def telegram_request(method, data):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
+    return requests.post(url, data=data, timeout=20)
+
+
+def send_message(chat_id, text, keyboard=None):
+    data = {
+        "chat_id": chat_id,
+        "text": text,
+        "disable_web_page_preview": False
+    }
+    if keyboard:
+        data["reply_markup"] = keyboard
+    telegram_request("sendMessage", data)
+
+
+def main_keyboard():
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "🆕 الجديد", "callback_data": "new"},
+                {"text": "📊 الحالة", "callback_data": "status"}
+            ]
+        ]
+    }
 
 
 def get_last_hash():
@@ -50,9 +80,12 @@ def save_state(text):
 
 
 def get_state():
-    return open(STATE_FILE).read() if os.path.exists(STATE_FILE) else "لا توجد بيانات بعد"
+    return open(STATE_FILE, encoding="utf-8").read() if os.path.exists(STATE_FILE) else "لا توجد بيانات بعد"
 
 
+# =========================
+# استخراج آخر منشور
+# =========================
 def extract_latest_post():
     html = fetch_page(FACEBOOK_PAGE)
     if not html:
@@ -73,19 +106,24 @@ def extract_latest_post():
 
     return post_url, text
 
-# ====================
-# المراقبة التلقائية
-# ====================
+
+# =========================
+# المراقبة التلقائية 24/7
+# =========================
 def auto_monitor():
     while True:
-        post_url, text = extract_latest_post()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        post_url, text = extract_latest_post()
 
         if post_url:
             h = hashlib.sha1((post_url + text).encode()).hexdigest()
             if h != get_last_hash():
                 save_hash(h)
-                send_telegram(f"🆕 منشور جديد تلقائيًا\n\n{text[:1200]}\n\n{post_url}")
+                send_message(
+                    OWNER_CHAT_ID,
+                    f"🆕 منشور جديد تلقائيًا\n\n{text[:1200]}\n\n🔗 {post_url}",
+                    main_keyboard()
+                )
                 save_state(f"✔️ آخر فحص: {now}\n🆕 تم العثور على منشور جديد")
             else:
                 save_state(f"✔️ آخر فحص: {now}\nℹ️ لا يوجد منشور جديد")
@@ -94,44 +132,85 @@ def auto_monitor():
 
         time.sleep(CHECK_INTERVAL)
 
-# ====================
-# الاستماع لأوامر تلجرام
-# ====================
+
+# =========================
+# الاستماع لأوامر تلجرام + الأزرار
+# =========================
 def telegram_listener():
+    print("✅ Telegram listener started")
     offset = 0
+
     while True:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-        r = requests.get(url, params={"offset": offset, "timeout": 30}).json()
+        try:
+            r = requests.get(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates",
+                params={"offset": offset, "timeout": 30},
+                timeout=40
+            ).json()
 
-        for update in r.get("result", []):
-            offset = update["update_id"] + 1
-            msg = update.get("message", {}).get("text", "").strip()
+            for update in r.get("result", []):
+                offset = update["update_id"] + 1
 
-            if msg == "الجديد":
-                post_url, text = extract_latest_post()
-                if not post_url:
-                    send_telegram("❌ لم أستطع جلب أي منشور")
-                    continue
+                # رسالة نصية
+                if "message" in update:
+                    chat_id = update["message"]["chat"]["id"]
+                    text = update["message"].get("text", "")
 
-                h = hashlib.sha1((post_url + text).encode()).hexdigest()
-                if h == get_last_hash():
-                    send_telegram("ℹ️ هذا المنشور تم جلبه مسبقًا")
-                else:
-                    save_hash(h)
-                    send_telegram(f"🆕 منشور جديد (يدوي)\n\n{text[:1200]}\n\n{post_url}")
+                    if chat_id != OWNER_CHAT_ID:
+                        continue
 
-            elif msg == "الحالة":
-                send_telegram("📊 حالة المراقبة:\n\n" + get_state())
+                    if text in ("/start", "start", "Start"):
+                        send_message(
+                            chat_id,
+                            "✅ البوت يعمل ويراقب صفحة العربية تلقائيًا\n\nاختر من الأزرار 👇",
+                            main_keyboard()
+                        )
+
+                # زر شفاف (Callback)
+                if "callback_query" in update:
+                    cb = update["callback_query"]
+                    chat_id = cb["message"]["chat"]["id"]
+                    data = cb["data"]
+
+                    if chat_id != OWNER_CHAT_ID:
+                        continue
+
+                    if data == "new":
+                        post_url, text = extract_latest_post()
+                        if not post_url:
+                            send_message(chat_id, "❌ لم أستطع جلب أي منشور", main_keyboard())
+                        else:
+                            h = hashlib.sha1((post_url + text).encode()).hexdigest()
+                            if h == get_last_hash():
+                                send_message(chat_id, "ℹ️ هذا المنشور تم جلبه مسبقًا", main_keyboard())
+                            else:
+                                save_hash(h)
+                                send_message(
+                                    chat_id,
+                                    f"🆕 منشور جديد (يدوي)\n\n{text[:1200]}\n\n🔗 {post_url}",
+                                    main_keyboard()
+                                )
+
+                    elif data == "status":
+                        send_message(chat_id, "📊 حالة المراقبة:\n\n" + get_state(), main_keyboard())
+
+        except Exception as e:
+            print("Telegram error:", e)
 
         time.sleep(5)
 
-# ====================
-# Flask (عشان Render)
-# ====================
+
+# =========================
+# Flask (لـ Render)
+# =========================
 @app.route("/")
 def home():
-    return "Bot is running"
+    return jsonify({"status": "Bot is running"})
 
+
+# =========================
+# تشغيل
+# =========================
 if __name__ == "__main__":
     threading.Thread(target=auto_monitor, daemon=True).start()
     threading.Thread(target=telegram_listener, daemon=True).start()
