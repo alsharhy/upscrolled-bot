@@ -1,5 +1,6 @@
 services:
-  - type: worker
-    name: fb-alarabiya-bot
-    runtime: php
-    startCommand: bash start.sh
+  - type: cron
+    name: fb-alarabiya-cron
+    runtime: python
+    schedule: "*/15 * * * *"
+    startCommand: python fb_alarabiya_bot.py
