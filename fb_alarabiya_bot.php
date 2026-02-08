@@ -3,8 +3,8 @@
  * الإعدادات
  ********************/
 $facebookPage = "https://mbasic.facebook.com/AlArabiya";
-$telegramBotToken = "PUT_BOT_TOKEN_HERE";
-$telegramChatId   = "PUT_CHAT_ID_HERE";
+$telegramBotToken = "7522002533:AAEQzquyk1AOV71gtyljXeMHfCBJyKv3iE0";
+$telegramChatId   = "5442141079";
 
 $hashFile = __DIR__ . "/last_post_hash.txt";
 
