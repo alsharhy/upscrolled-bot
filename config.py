@@ -1,0 +1,11 @@
+import os
+
+UPSCROLLED_EMAIL = os.getenv("UPSCROLLED_EMAIL")
+UPSCROLLED_PASSWORD = os.getenv("UPSCROLLED_PASSWORD")
+
+FACEBOOK_PAGE = "https://www.facebook.com/AlArabiya"
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+WAIT_TIME = 6000
