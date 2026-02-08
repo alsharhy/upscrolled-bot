@@ -1,8 +1,5 @@
 services:
   - type: worker
-    name: upscrolled-bot
-    env: python
-    buildCommand: |
-      pip install -r requirements.txt
-      playwright install chromium
-    startCommand: python main.py
+    name: fb-alarabiya-bot
+    runtime: php
+    startCommand: bash start.sh
